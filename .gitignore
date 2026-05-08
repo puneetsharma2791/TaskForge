@@ -1,0 +1,4 @@
+node_modules/
+dist/
+taskforge/backend/api
+.DS_Store
