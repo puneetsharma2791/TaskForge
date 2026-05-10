@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func RegisterRoutes(r *mux.Router, th *TasksHandler, ph *ProjectsHandler) {
+func RegisterRoutes(r *mux.Router, th *TasksHandler, ph *ProjectsHandler, ch ...*CommentsHandler) {
 	api := r.PathPrefix("/api/v1").Subrouter()
 
 	// Auth (mock)
@@ -18,8 +18,17 @@ func RegisterRoutes(r *mux.Router, th *TasksHandler, ph *ProjectsHandler) {
 	api.HandleFunc("/tasks", th.Create).Methods("POST")
 	api.HandleFunc("/tasks/{id}", th.Get).Methods("GET")
 	api.HandleFunc("/tasks/{id}", th.Update).Methods("PUT")
+	api.HandleFunc("/tasks/{id}", th.Delete).Methods("DELETE")
 	api.HandleFunc("/tasks/{id}/complete", th.Complete).Methods("POST")
 	api.HandleFunc("/tasks/{id}/assign", th.Assign).Methods("POST")
+
+	// Comment routes
+	if len(ch) > 0 && ch[0] != nil {
+		api.HandleFunc("/tasks/{id}/comments", ch[0].List).Methods("GET")
+		api.HandleFunc("/tasks/{id}/comments", ch[0].Add).Methods("POST")
+		api.HandleFunc("/tasks/{id}/comments/{commentId}", ch[0].Edit).Methods("PUT")
+		api.HandleFunc("/tasks/{id}/comments/{commentId}", ch[0].Delete).Methods("DELETE")
+	}
 
 	// Project routes
 	api.HandleFunc("/projects", ph.List).Methods("GET")

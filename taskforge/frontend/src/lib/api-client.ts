@@ -17,37 +17,32 @@ class ApiClient {
     localStorage.removeItem('auth_token');
   }
 
-  async get<T>(path: string): Promise<T> {
+  private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
       headers: this.headers(),
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || `Request failed with status ${res.status}`);
+    }
+    return data as T;
+  }
+
+  async get<T>(path: string): Promise<T> {
+    return this.request<T>(path);
   }
 
   async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify(body),
-    });
-    return res.json();
+    return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
   }
 
   async put<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method: 'PUT',
-      headers: this.headers(),
-      body: JSON.stringify(body),
-    });
-    return res.json();
+    return this.request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
   }
 
   async delete<T>(path: string): Promise<T> {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method: 'DELETE',
-      headers: this.headers(),
-    });
-    return res.json();
+    return this.request<T>(path, { method: 'DELETE' });
   }
 
   private headers(): Record<string, string> {

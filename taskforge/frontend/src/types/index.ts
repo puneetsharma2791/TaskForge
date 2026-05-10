@@ -69,6 +69,15 @@ export interface CreateProjectPayload {
   description?: string;
 }
 
+export interface Comment {
+  id: string;
+  task_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // API response wrapper
 export interface ApiResponse<T> {
   data: T;

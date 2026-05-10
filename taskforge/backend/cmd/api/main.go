@@ -22,8 +22,9 @@ func main() {
 	projectRepo := repositories.NewInMemoryProjectRepository(store)
 	taskProjector := projectors.NewTaskProjector()
 
-	tasksHandler := v1.NewTasksHandler(taskRepo, taskProjector)
+	tasksHandler := v1.NewTasksHandler(taskRepo, taskProjector, store)
 	projectsHandler := v1.NewProjectsHandler(projectRepo)
+	commentsHandler := v1.NewCommentsHandler(taskRepo, taskProjector, store)
 
 	r := mux.NewRouter()
 
@@ -42,7 +43,7 @@ func main() {
 		})
 	})
 
-	v1.RegisterRoutes(r, tasksHandler, projectsHandler)
+	v1.RegisterRoutes(r, tasksHandler, projectsHandler, commentsHandler)
 
 	// Wrap the router with a top-level CORS handler so OPTIONS
 	// preflight requests are caught before mux route matching.

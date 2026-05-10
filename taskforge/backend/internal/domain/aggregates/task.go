@@ -5,7 +5,16 @@ import (
 	"time"
 
 	"github.com/acme/taskforge/internal/domain/events"
+	"github.com/google/uuid"
 )
+
+type Comment struct {
+	ID        string
+	AuthorID  string
+	Content   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
 
 type TaskStatus string
 
@@ -31,6 +40,7 @@ type Task struct {
 	assigneeID  string
 	priority    int
 	createdBy   string
+	comments    map[string]*Comment
 	events      []Event
 	version     int
 }
@@ -40,6 +50,7 @@ func NewTask(id, projectID string) *Task {
 		id:        id,
 		projectID: projectID,
 		status:    StatusDraft,
+		comments:  make(map[string]*Comment),
 		events:    make([]Event, 0),
 	}
 }
@@ -103,6 +114,61 @@ func (t *Task) UpdatePriority(priority int) error {
 	return nil
 }
 
+const MaxCommentLength = 2500
+
+func (t *Task) AddComment(authorID, content string) (string, error) {
+	if len(content) == 0 {
+		return "", fmt.Errorf("comment content cannot be empty")
+	}
+	if len(content) > MaxCommentLength {
+		return "", fmt.Errorf("comment content exceeds maximum length of %d characters", MaxCommentLength)
+	}
+	commentID := uuid.New().String()
+	t.apply(&events.CommentAdded{
+		TaskID:     t.id,
+		CommentID:  commentID,
+		AuthorID:   authorID,
+		Content:    content,
+		OccurredAt: time.Now(),
+	})
+	return commentID, nil
+}
+
+func (t *Task) EditComment(commentID, content, editorID string) error {
+	if _, exists := t.comments[commentID]; !exists {
+		return fmt.Errorf("comment not found: %s", commentID)
+	}
+	if len(content) == 0 {
+		return fmt.Errorf("comment content cannot be empty")
+	}
+	if len(content) > MaxCommentLength {
+		return fmt.Errorf("comment content exceeds maximum length of %d characters", MaxCommentLength)
+	}
+	t.apply(&events.CommentEdited{
+		TaskID:    t.id,
+		CommentID: commentID,
+		Content:   content,
+		EditedBy:  editorID,
+		OccurredAt: time.Now(),
+	})
+	return nil
+}
+
+func (t *Task) DeleteComment(commentID, deletedBy string) error {
+	if _, exists := t.comments[commentID]; !exists {
+		return fmt.Errorf("comment not found: %s", commentID)
+	}
+	t.apply(&events.CommentDeleted{
+		TaskID:    t.id,
+		CommentID: commentID,
+		DeletedBy: deletedBy,
+		OccurredAt: time.Now(),
+	})
+	return nil
+}
+
+func (t *Task) Comments() map[string]*Comment { return t.comments }
+
 func (t *Task) apply(event Event) {
 	t.events = append(t.events, event)
 	t.version++
@@ -125,6 +191,21 @@ func (t *Task) apply(event Event) {
 		t.assigneeID = e.NewAssigneeID
 	case *events.TaskPriorityUpdated:
 		t.priority = e.Priority
+	case *events.CommentAdded:
+		t.comments[e.CommentID] = &Comment{
+			ID:        e.CommentID,
+			AuthorID:  e.AuthorID,
+			Content:   e.Content,
+			CreatedAt: e.OccurredAt,
+			UpdatedAt: e.OccurredAt,
+		}
+	case *events.CommentEdited:
+		if c, ok := t.comments[e.CommentID]; ok {
+			c.Content = e.Content
+			c.UpdatedAt = e.OccurredAt
+		}
+	case *events.CommentDeleted:
+		delete(t.comments, e.CommentID)
 	}
 }
 

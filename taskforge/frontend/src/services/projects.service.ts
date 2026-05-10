@@ -1,28 +1,23 @@
 import { apiClient } from '@/lib/api-client';
-import type { Project, CreateProjectPayload, ApiResponse } from '@/types';
+import type { Project, CreateProjectPayload } from '@/types';
 
 export const projectsService = {
   async list(): Promise<Project[]> {
-    const res = await apiClient.get<ApiResponse<Project[]>>('/projects');
-    return res.data;
+    return apiClient.get<Project[]>('/projects?tenant_id=tenant-1');
   },
 
   async getById(id: string): Promise<Project> {
-    const res = await apiClient.get<ApiResponse<Project>>(`/projects/${id}`);
-    return res.data;
+    return apiClient.get<Project>(`/projects/${id}`);
   },
 
   async create(payload: CreateProjectPayload): Promise<Project> {
-    const res = await apiClient.post<ApiResponse<Project>>('/projects', payload);
-    return res.data;
+    return apiClient.post<Project>('/projects', { ...payload, tenant_id: 'tenant-1' });
   },
 
   async update(id: string, payload: Partial<CreateProjectPayload>): Promise<Project> {
-    const res = await apiClient.put<ApiResponse<Project>>(`/projects/${id}`, payload);
-    return res.data;
+    return apiClient.put<Project>(`/projects/${id}`, payload);
   },
 
-  // Removes the project
   async delete(id: string): Promise<void> {
     await apiClient.delete(`/projects/${id}`);
   },

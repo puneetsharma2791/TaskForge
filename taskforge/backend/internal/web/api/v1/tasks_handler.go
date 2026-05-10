@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"runtime/debug"
 
 	"github.com/gorilla/mux"
 
@@ -12,15 +11,26 @@ import (
 	"github.com/acme/taskforge/internal/domain/projectors"
 	"github.com/acme/taskforge/internal/domain/queries"
 	"github.com/acme/taskforge/internal/domain/repositories"
+	"github.com/acme/taskforge/internal/storage"
 )
 
 type TasksHandler struct {
 	repo      repositories.TaskRepository
 	projector *projectors.TaskProjector
+	store     *storage.EventStore
 }
 
-func NewTasksHandler(repo repositories.TaskRepository, proj *projectors.TaskProjector) *TasksHandler {
-	return &TasksHandler{repo: repo, projector: proj}
+func NewTasksHandler(repo repositories.TaskRepository, proj *projectors.TaskProjector, store *storage.EventStore) *TasksHandler {
+	return &TasksHandler{repo: repo, projector: proj, store: store}
+}
+
+// projectEventsForAggregate replays all events for an aggregate from the
+// event store into the projector, rebuilding the read model.
+func (h *TasksHandler) projectEventsForAggregate(aggregateID string) {
+	events, _ := h.store.Load(aggregateID)
+	for _, evt := range events {
+		h.projector.Project(evt)
+	}
 }
 
 func (h *TasksHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -78,13 +88,8 @@ func (h *TasksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// project events to read model
-	task, _ := h.repo.FindByID(id)
-	if task != nil {
-		for _, evt := range task.PendingEvents() {
-			h.projector.Project(evt)
-		}
-	}
+	// project events from event store to read model
+	h.projectEventsForAggregate(id)
 
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id})
 }
@@ -121,12 +126,15 @@ func (h *TasksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// capture events before save clears them
+	pendingEvents := t.PendingEvents()
+
 	if err := h.repo.Save(t); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	for _, evt := range t.PendingEvents() {
+	for _, evt := range pendingEvents {
 		h.projector.Project(evt)
 	}
 
@@ -156,6 +164,8 @@ func (h *TasksHandler) Assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.projectEventsForAggregate(id)
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "assigned"})
 }
 
@@ -169,7 +179,23 @@ func (h *TasksHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.projectEventsForAggregate(id)
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+}
+
+func (h *TasksHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+
+	if err := h.repo.Delete(id); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Remove from the read model
+	h.projector.RemoveView(id)
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -181,8 +207,11 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 func writeError(w http.ResponseWriter, status int, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+	msg := "unknown error"
+	if err != nil {
+		msg = err.Error()
+	}
 	json.NewEncoder(w).Encode(map[string]string{
-		"error": err.Error(),
-		"trace": string(debug.Stack()),
+		"error": msg,
 	})
 }

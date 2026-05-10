@@ -88,3 +88,34 @@ type ProjectDeleted struct {
 }
 
 func (e *ProjectDeleted) EventType() string { return "project.deleted" }
+
+// Comment events
+
+type CommentAdded struct {
+	TaskID     string
+	CommentID  string
+	AuthorID   string
+	Content    string
+	OccurredAt time.Time
+}
+
+func (e *CommentAdded) EventType() string { return "comment.added" }
+
+type CommentEdited struct {
+	TaskID     string
+	CommentID  string
+	Content    string
+	EditedBy   string
+	OccurredAt time.Time
+}
+
+func (e *CommentEdited) EventType() string { return "comment.edited" }
+
+type CommentDeleted struct {
+	TaskID     string
+	CommentID  string
+	DeletedBy  string
+	OccurredAt time.Time
+}
+
+func (e *CommentDeleted) EventType() string { return "comment.deleted" }

@@ -9,14 +9,16 @@ import (
 )
 
 type TaskProjector struct {
-	views  map[string]*types.TaskView
-	buffer []aggregates.Event
+	views    map[string]*types.TaskView
+	comments map[string][]*types.CommentView // taskID -> comments
+	buffer   []aggregates.Event
 }
 
 func NewTaskProjector() *TaskProjector {
 	return &TaskProjector{
-		views:  make(map[string]*types.TaskView),
-		buffer: make([]aggregates.Event, 0),
+		views:    make(map[string]*types.TaskView),
+		comments: make(map[string][]*types.CommentView),
+		buffer:   make([]aggregates.Event, 0),
 	}
 }
 
@@ -58,12 +60,55 @@ func (p *TaskProjector) Project(evt aggregates.Event) {
 		v := p.views[e.TaskID]
 		v.Priority = e.Priority
 		v.UpdatedAt = time.Now()
+	case *events.CommentAdded:
+		comment := &types.CommentView{
+			ID:        e.CommentID,
+			TaskID:    e.TaskID,
+			AuthorID:  e.AuthorID,
+			Content:   e.Content,
+			CreatedAt: e.OccurredAt,
+			UpdatedAt: e.OccurredAt,
+		}
+		p.comments[e.TaskID] = append(p.comments[e.TaskID], comment)
+		if v, ok := p.views[e.TaskID]; ok {
+			v.CommentCount = len(p.comments[e.TaskID])
+		}
+	case *events.CommentEdited:
+		for _, c := range p.comments[e.TaskID] {
+			if c.ID == e.CommentID {
+				c.Content = e.Content
+				c.UpdatedAt = e.OccurredAt
+				break
+			}
+		}
+	case *events.CommentDeleted:
+		comments := p.comments[e.TaskID]
+		for i, c := range comments {
+			if c.ID == e.CommentID {
+				p.comments[e.TaskID] = append(comments[:i], comments[i+1:]...)
+				break
+			}
+		}
+		if v, ok := p.views[e.TaskID]; ok {
+			v.CommentCount = len(p.comments[e.TaskID])
+		}
 	}
 }
 
 // GetView returns the read model for a task
 func (p *TaskProjector) GetView(taskID string) *types.TaskView {
 	return p.views[taskID]
+}
+
+// RemoveView deletes a task and its comments from the read model
+func (p *TaskProjector) RemoveView(taskID string) {
+	delete(p.views, taskID)
+	delete(p.comments, taskID)
+}
+
+// GetComments returns comments for a task, sorted by creation time
+func (p *TaskProjector) GetComments(taskID string) []*types.CommentView {
+	return p.comments[taskID]
 }
 
 // GetAll returns all task views

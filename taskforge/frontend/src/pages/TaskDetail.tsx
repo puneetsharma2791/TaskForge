@@ -5,9 +5,8 @@ import { useApi } from '@/hooks/useApi';
 import { useMutation } from '@/hooks/useMutation';
 import StatusBadge from '@/components/StatusBadge';
 import TaskForm from '@/components/TaskForm';
-import type { CreateTaskPayload, TaskStatus } from '@/types';
-
-const STATUS_TRANSITIONS: TaskStatus[] = ['draft', 'open', 'in_progress', 'completed', 'cancelled'];
+import CommentSection from '@/components/CommentSection';
+import type { CreateTaskPayload } from '@/types';
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -20,11 +19,6 @@ export default function TaskDetail() {
 
   const { mutate: updateTask } = useMutation(
     (payload: CreateTaskPayload) => tasksService.update(id!, payload),
-    { onSuccess: () => navigate('/tasks') }
-  );
-
-  const { mutate: updateStatus } = useMutation(
-    (status: TaskStatus) => tasksService.updateStatus(id!, status),
     { onSuccess: () => navigate('/tasks') }
   );
 
@@ -84,18 +78,6 @@ export default function TaskDetail() {
             />
           )}
 
-          {/* Status transitions */}
-          <div className="flex gap-2 mt-4">
-            {STATUS_TRANSITIONS.map((status) => (
-              <button
-                key={status}
-                className="btn btn-outline btn-xs"
-                onClick={() => updateStatus(status)}
-              >
-                {status.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -106,6 +88,13 @@ export default function TaskDetail() {
         onSubmit={handleSubmit}
         isEdit={!isNew}
       />
+
+      {!isNew && id && (
+        <>
+          <div className="divider">Comments</div>
+          <CommentSection taskId={id} />
+        </>
+      )}
     </div>
   );
 }
